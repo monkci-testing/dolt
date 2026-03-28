@@ -1,5 +1,4 @@
 name: Test Go
-
 on:
   pull_request:
     branches: [ main ]
@@ -7,22 +6,38 @@ on:
       - 'go/**'
       - '.github/workflows/ci-go-tests.yaml'
   workflow_dispatch:
-
+    inputs:
+      runner:
+        description: 'Runner to use for benchmark jobs'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - ubuntu-latest
+          - monkci-ubuntu-24.04-4-3600iops
+          - all
 concurrency:
   group: ci-go-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   test:
-    name: Go tests
+    name: Go tests (${{ matrix.os }}, ${{ matrix.runner }})
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-22.04' && matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
+        runner: ${{ github.event_name == 'workflow_dispatch' && inputs.runner != 'all' && fromJson(format('["{0}"]', inputs.runner)) || fromJson('["monkci-ubuntu-24.04-4-3600iops", "ubuntu-latest"]') }}
+        exclude:
+          # For non-ubuntu OSes, only run with ubuntu-latest to avoid
+          # duplicate runs on macos/windows (custom runner is Linux-only)
+          - os: macos-latest
+            runner: monkci-ubuntu-24.04-4-3600iops
+          - os: windows-latest
+            runner: monkci-ubuntu-24.04-4-3600iops
     steps:
     - uses: actions/checkout@v6
     - name: Set up Go 1.x
@@ -56,7 +71,7 @@ jobs:
         if [ "$MATRIX_OS" == 'windows-latest' ]; then
           export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
         fi
-        
+
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
           # Skip binlog tests as they run in a separate CI job
@@ -64,7 +79,7 @@ jobs:
             echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
             continue
           fi
-          
+
           echo "Testing Package: ${file_arr[$i]}"
           if [ "$MATRIX_OS" == 'ubuntu-22.04' ]
           then
@@ -85,16 +100,25 @@ jobs:
       env:
         MATRIX_OS: ${{ matrix.os }}
         MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+
   noracetest:
-    name: Go tests - no race
+    name: Go tests - no race (${{ matrix.os }}, ${{ matrix.runner }})
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-22.04' && matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
+        runner: ${{ github.event_name == 'workflow_dispatch' && inputs.runner != 'all' && fromJson(format('["{0}"]', inputs.runner)) || fromJson('["monkci-ubuntu-24.04-4-3600iops", "ubuntu-latest"]') }}
+        exclude:
+          # For non-ubuntu OSes, only run with ubuntu-latest to avoid
+          # duplicate runs on macos/windows (custom runner is Linux-only)
+          - os: macos-latest
+            runner: monkci-ubuntu-24.04-4-3600iops
+          - os: windows-latest
+            runner: monkci-ubuntu-24.04-4-3600iops
     steps:
     - uses: actions/checkout@v6
     - name: Set up Go 1.x
